@@ -614,18 +614,26 @@
   // ============================================================
   // 게임 흐름
   // ============================================================
+  function requestLock() {
+    // 일부 환경(미리보기 iframe 등)에서 포인터 락이 막힐 수 있으므로 안전 처리
+    try {
+      const p = renderer.domElement.requestPointerLock();
+      if (p && typeof p.catch === 'function') p.catch(() => {});
+    } catch (e) { /* 포인터 락 불가 — 게임은 계속 진행 */ }
+  }
+
   function startGame() {
     dom.overlay.classList.add('hidden');
-    renderer.domElement.requestPointerLock();
     resetState();
     running = true;
+    requestLock();
   }
 
   function restartGame() {
     dom.gameover.classList.add('hidden');
-    renderer.domElement.requestPointerLock();
     resetState();
     running = true;
+    requestLock();
   }
 
   function resetState() {

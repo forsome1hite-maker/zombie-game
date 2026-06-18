@@ -72,8 +72,21 @@
     </div>
   </div>
 
-  <!-- Three.js (3D 렌더링) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Three.js (3D 렌더링) — 로컬 포함본. 인터넷 없이도 동작 -->
+  <script src="three.min.js"></script>
+  <script>
+    // Three.js 로딩 실패 시 화면에 원인 표시 (조용히 멈추지 않도록)
+    if (typeof THREE === 'undefined') {
+      document.addEventListener('DOMContentLoaded', () => {
+        const p = document.querySelector('#overlay .panel');
+        if (p) {
+          p.innerHTML = '<h1>⚠️ 로딩 오류</h1>' +
+            '<p class="desc">3D 라이브러리(three.min.js)를 불러오지 못했습니다.<br>' +
+            'index.html 과 같은 폴더에 three.min.js 파일이 있는지 확인하세요.</p>';
+        }
+      });
+    }
+  </script>
   <script src="main.js"></script>
 </body>
 </html>
