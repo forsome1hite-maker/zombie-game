@@ -259,29 +259,8 @@
   // ---------- 총 모델 ----------
   function buildGun() {
     gun = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2c2f36, roughness: 0.5, metalness: 0.6 });
-    const accentMat = new THREE.MeshStandardMaterial({ color: 0xffd45e, roughness: 0.4, metalness: 0.3 });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.5), bodyMat);
-    body.position.set(0, 0, -0.1);
-    gun.add(body);
-
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.5, 12), bodyMat);
-    barrel.rotation.x = Math.PI / 2;
-    barrel.position.set(0, 0.02, -0.4);
-    gun.add(barrel);
-
-    const grip = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.12), bodyMat);
-    grip.position.set(0, -0.16, 0.05);
-    grip.rotation.x = 0.3;
-    gun.add(grip);
-
-    const sight = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, 0.08), accentMat);
-    sight.position.set(0, 0.12, -0.05);
-    gun.add(sight);
-    gun.userData.accent = accentMat; // 무기별 색 변경용
-
-    // 총구 섬광
+    // 총구 섬광 (무기별로 위치를 옮긴다)
     muzzleFlash = new THREE.PointLight(0xffcc66, 0, 8);
     muzzleFlash.position.set(0, 0.02, -0.7);
     gun.add(muzzleFlash);
@@ -292,37 +271,163 @@
     gun.add(flashMesh);
     gun.userData.flashMesh = flashMesh;
 
+    // 무기 모델 본체를 담는 그룹 — 업그레이드 시 통째로 교체
+    const partsGroup = new THREE.Group();
+    gun.add(partsGroup);
+    gun.userData.partsGroup = partsGroup;
+
     // 화면 우하단에 배치, 카메라에 부착
     gun.position.set(0.22, -0.2, -0.45);
     gun.userData.restPos = gun.position.clone();
     camera.add(gun);
+
+    applyWeaponModel(0);
+  }
+
+  // 무기 레벨에 맞는 총 모양으로 교체한다.
+  function applyWeaponModel(level) {
+    const partsGroup = gun.userData.partsGroup;
+    gun.userData.core = null;   // 플라즈마 코어 참조 초기화
+    // 기존 파트 정리
+    for (let i = partsGroup.children.length - 1; i >= 0; i--) {
+      const c = partsGroup.children[i];
+      partsGroup.remove(c);
+      if (c.geometry) c.geometry.dispose();
+      if (c.material) c.material.dispose();
+    }
+
+    const w = WEAPONS[level];
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2c2f36, roughness: 0.5, metalness: 0.6 });
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x16181d, roughness: 0.6, metalness: 0.5 });
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: w.color, emissive: w.color, emissiveIntensity: 0.35, roughness: 0.35, metalness: 0.4,
+    });
+    gun.userData.accent = accentMat;
+
+    const add = (mesh, x, y, z, rx, ry, rz) => {
+      mesh.position.set(x || 0, y || 0, z || 0);
+      if (rx) mesh.rotation.x = rx;
+      if (ry) mesh.rotation.y = ry;
+      if (rz) mesh.rotation.z = rz;
+      partsGroup.add(mesh);
+      return mesh;
+    };
+    const box = (w, h, d, mat) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat || bodyMat);
+    const cyl = (r1, r2, h, seg, mat) => new THREE.Mesh(new THREE.CylinderGeometry(r1, r2, h, seg || 12), mat || bodyMat);
+
+    let muzzleZ = -0.7;  // 총구 섬광 위치(무기별)
+
+    if (level === 0) {
+      // 피스톨 — 작고 단순
+      add(box(0.12, 0.16, 0.5), 0, 0, -0.1);
+      add(cyl(0.035, 0.035, 0.5, 12), 0, 0.02, -0.4, Math.PI / 2);
+      add(box(0.1, 0.22, 0.12), 0, -0.16, 0.05, 0.3);
+      add(box(0.04, 0.05, 0.08, accentMat), 0, 0.12, -0.05);
+      muzzleZ = -0.7;
+
+    } else if (level === 1) {
+      // SMG — 길쭉한 몸체 + 탄창 + 짧은 총열
+      add(box(0.13, 0.18, 0.62), 0, 0, -0.12);
+      add(cyl(0.03, 0.03, 0.34, 12), 0, 0.03, -0.5, Math.PI / 2);
+      add(box(0.1, 0.26, 0.12), 0, -0.2, 0.1, 0.25);          // 손잡이
+      add(box(0.08, 0.3, 0.14, darkMat), 0, -0.22, -0.18, -0.2); // 탄창
+      add(box(0.05, 0.06, 0.18, accentMat), 0, 0.13, -0.1);   // 상부 레일
+      muzzleZ = -0.74;
+
+    } else if (level === 2) {
+      // 샷건 — 굵은 더블 배럴 + 펌프
+      add(box(0.16, 0.2, 0.5), 0, 0, -0.05);
+      [-0.05, 0.05].forEach((x) => add(cyl(0.055, 0.055, 0.7, 14), x, 0.03, -0.5, Math.PI / 2));
+      add(box(0.13, 0.13, 0.22, darkMat), 0, -0.06, -0.42);   // 펌프 핸드가드
+      add(box(0.12, 0.26, 0.13), 0, -0.18, 0.12, 0.3);        // 손잡이
+      add(box(0.06, 0.05, 0.12, accentMat), 0, 0.14, -0.1);
+      muzzleZ = -0.86;
+
+    } else if (level === 3) {
+      // 라이플 — 긴 총열 + 스코프 + 개머리판
+      add(box(0.12, 0.16, 0.8), 0, 0, -0.18);
+      add(cyl(0.028, 0.028, 0.7, 12), 0, 0.02, -0.7, Math.PI / 2);
+      add(box(0.1, 0.24, 0.12), 0, -0.18, 0.08, 0.28);        // 손잡이
+      add(box(0.1, 0.18, 0.26, darkMat), 0, -0.02, 0.32);     // 개머리판
+      add(box(0.08, 0.32, 0.13, darkMat), 0, -0.22, -0.05, -0.15); // 탄창
+      // 스코프
+      add(cyl(0.05, 0.05, 0.26, 14, darkMat), 0, 0.16, -0.1, 0, 0, Math.PI / 2);
+      add(cyl(0.045, 0.045, 0.04, 14, accentMat), 0, 0.16, -0.24, 0, 0, Math.PI / 2);
+      muzzleZ = -1.0;
+
+    } else {
+      // 플라즈마건 — 미래형, 빛나는 에너지 코어 + 코일
+      add(box(0.16, 0.2, 0.6), 0, 0, -0.1);
+      // 에너지 코어 (빛나는 구체)
+      const core = new THREE.Mesh(new THREE.SphereGeometry(0.09, 16, 16), accentMat);
+      add(core, 0, 0.04, 0.02);
+      gun.userData.core = core;
+      // 배출구 (테이퍼 노즐)
+      add(cyl(0.04, 0.1, 0.5, 16, darkMat), 0, 0.04, -0.5, Math.PI / 2);
+      // 에너지 코일 (총열 둘레의 발광 링)
+      [-0.32, -0.46, -0.6].forEach((z) => {
+        add(new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.018, 8, 18), accentMat), 0, 0.04, z, 0, 0, 0);
+      });
+      add(box(0.12, 0.26, 0.13), 0, -0.2, 0.12, 0.3);         // 손잡이
+      // 측면 발광 핀
+      [-0.1, 0.1].forEach((x) => add(box(0.02, 0.1, 0.4, accentMat), x, 0.04, -0.12));
+      muzzleZ = -0.82;
+    }
+
+    // 총구 섬광/플래시 위치 갱신
+    muzzleFlash.position.z = muzzleZ;
+    gun.userData.flashMesh.position.z = muzzleZ;
+    muzzleFlash.color.setHex(w.color);
+    gun.userData.flashMesh.material.color.setHex(w.color);
   }
 
   // ============================================================
   // 좀비
   // ============================================================
-  function makeZombie(isBig) {
+  // 좀비 종류별 특성
+  //  normal : 평범한 좀비
+  //  big    : 느리지만 단단하고, 처치 시 아이템 드롭
+  //  runner : 빠르게 달려오는 좀비 (체력 낮고 호리호리)
+  const ZOMBIE_TYPES = {
+    normal: { scale: 1.0,  skin: 0x4f9d52, baseHp: 60,  speed: 2.6, damage: 8  },
+    big:    { scale: 2.2,  skin: 0x2f7d32, baseHp: 320, speed: 1.7, damage: 18 },
+    runner: { scale: 0.9,  skin: 0xc6e84a, baseHp: 32,  speed: 6.4, damage: 6  },
+  };
+
+  function makeZombie(type) {
+    if (type === true) type = 'big';          // 이전 호출 형태 호환
+    else if (type === false || !type) type = 'normal';
+    const cfg = ZOMBIE_TYPES[type] || ZOMBIE_TYPES.normal;
+    const isBig = type === 'big';
+    const isRunner = type === 'runner';
+
     const g = new THREE.Group();
-    const scale = isBig ? 2.2 : 1;
-    const skin = isBig ? 0x2f7d32 : 0x4f9d52;
+    const skin = cfg.skin;
     const skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.85 });
 
+    // 러너는 호리호리하게, 그 외는 보통 체형
+    const tw = isRunner ? 0.5 : 0.7;   // 몸통 너비
+    const td = isRunner ? 0.32 : 0.4;  // 몸통 두께
+
     // 몸통
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.4), skinMat);
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(tw, 1.0, td), skinMat);
     torso.position.y = 1.0;
+    if (isRunner) torso.rotation.x = 0.28;   // 앞으로 기울인 돌진 자세
     g.add(torso);
 
     // 머리 (헤드샷 판정 부위)
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
-    head.position.y = 1.75;
+    const headSize = isRunner ? 0.42 : 0.5;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), skinMat);
+    head.position.y = isRunner ? 1.7 : 1.75;
+    if (isRunner) head.position.z = 0.18;
     head.userData.isHead = true;
     g.add(head);
 
-    // 눈 (빨간색) — 머리에 속하므로 헤드샷 판정
-    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
+    // 눈 — 러너는 더 사납게 주황빛, 그 외 빨강
+    const eyeMat = new THREE.MeshBasicMaterial({ color: isRunner ? 0xff7a1a : 0xff2222 });
     [-0.13, 0.13].forEach((x) => {
       const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeMat);
-      eye.position.set(x, 1.8, 0.26);
+      eye.position.set(x * (isRunner ? 0.8 : 1), isRunner ? 1.74 : 1.8, isRunner ? 0.4 : 0.26);
       eye.userData.isHead = true;
       g.add(eye);
     });
@@ -331,7 +436,7 @@
     const armMat = skinMat;
     [-0.45, 0.45].forEach((x) => {
       const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.7), armMat);
-      arm.position.set(x, 1.2, 0.4);
+      arm.position.set(x * (isRunner ? 0.75 : 1), 1.2, isRunner ? 0.5 : 0.4);
       g.add(arm);
     });
 
@@ -343,7 +448,7 @@
       if (x < 0) g.userData.legL = leg; else g.userData.legR = leg;
     });
 
-    g.scale.setScalar(scale);
+    g.scale.setScalar(cfg.scale);
 
     // 스폰 위치: 플레이어 주변 원형 가장자리
     const ang = Math.random() * Math.PI * 2;
@@ -355,13 +460,21 @@
     );
     clamp(g.position);
 
-    const baseHp = isBig ? 320 : 60;
+    // ── 난이도: 웨이브가 오를수록 체력 증가 ──
+    // 선형 + 약한 가속 곡선으로 후반부가 확실히 어려워진다.
+    const wave = player.wave;
+    const hpScale = 1 + (wave - 1) * 0.22 + Math.pow(wave - 1, 1.35) * 0.05;
+    const hp = Math.round(cfg.baseHp * hpScale);
+
     const z = {
       mesh: g,
-      hp: baseHp + (player.wave - 1) * (isBig ? 50 : 12),
-      maxHp: baseHp + (player.wave - 1) * (isBig ? 50 : 12),
+      hp: hp,
+      maxHp: hp,
+      type: type,
       isBig: isBig,
-      speed: (isBig ? 1.7 : 2.6) + Math.random() * 0.6 + player.wave * 0.04,
+      isRunner: isRunner,
+      damage: cfg.damage,
+      speed: cfg.speed * (0.92 + Math.random() * 0.16) + wave * (isRunner ? 0.06 : 0.04),
       attackCd: 0,
       hitFlash: 0,
       walkPhase: Math.random() * Math.PI * 2,
@@ -497,8 +610,7 @@
     if (player.weaponLevel < WEAPONS.length - 1) {
       player.weaponLevel++;
       const w = WEAPONS[player.weaponLevel];
-      gun.userData.accent.color.setHex(w.color);
-      muzzleFlash.color.setHex(w.color);
+      applyWeaponModel(player.weaponLevel);   // 총 모양 자체가 바뀐다
       showToast(`무기 강화! → ${w.name} ⚡`);
     } else {
       // 이미 최강이면 체력 회복
@@ -589,8 +701,8 @@
         // 공격
         z.attackCd -= dt;
         if (z.attackCd <= 0) {
-          z.attackCd = 1.0;
-          damagePlayer(z.isBig ? 18 : 8);
+          z.attackCd = z.isRunner ? 0.7 : 1.0;   // 러너는 더 빠르게 할퀸다
+          damagePlayer(z.damage);
         }
       }
 
@@ -638,12 +750,23 @@
     spawnTimer -= dt;
     if (spawnTimer <= 0 && zombies.length < 28) {
       spawnTimer = spawnInterval;
-      // 웨이브가 오를수록 큰 좀비 확률 증가
-      const bigChance = Math.min(0.35, 0.08 + player.wave * 0.03);
-      makeZombie(Math.random() < bigChance);
+      makeZombie(pickZombieType());
       // 가끔 한 번에 둘
-      if (player.wave > 2 && Math.random() < 0.4) makeZombie(false);
+      if (player.wave > 2 && Math.random() < 0.4) makeZombie(pickZombieType());
     }
+  }
+
+  // 웨이브에 따라 좀비 종류를 확률적으로 결정
+  function pickZombieType() {
+    const wave = player.wave;
+    // 웨이브가 오를수록 큰 좀비/러너 확률 증가
+    const bigChance = Math.min(0.30, 0.06 + wave * 0.025);
+    // 러너는 웨이브 2부터 등장, 점점 흔해짐
+    const runnerChance = wave < 2 ? 0 : Math.min(0.45, 0.12 + (wave - 1) * 0.04);
+    const r = Math.random();
+    if (r < bigChance) return 'big';
+    if (r < bigChance + runnerChance) return 'runner';
+    return 'normal';
   }
 
   function updateShooting(dt) {
@@ -666,6 +789,13 @@
     // 총 반동 복귀
     gun.position.z += (gun.userData.restPos.z - gun.position.z) * Math.min(1, dt * 12);
     gun.rotation.x += (0 - gun.rotation.x) * Math.min(1, dt * 12);
+
+    // 플라즈마건 에너지 코어 맥동
+    if (gun.userData.core) {
+      const s = 1 + Math.sin(clock.elapsedTime * 6) * 0.18;
+      gun.userData.core.scale.setScalar(s);
+      gun.userData.accent.emissiveIntensity = 0.35 + Math.sin(clock.elapsedTime * 6) * 0.25;
+    }
 
     // 궤적 페이드
     for (let i = tracers.length - 1; i >= 0; i--) {
@@ -779,8 +909,7 @@
     player.weaponLevel = 0;
     player.score = 0;
     player.wave = 1;
-    gun.userData.accent.color.setHex(WEAPONS[0].color);
-    muzzleFlash.color.setHex(WEAPONS[0].color);
+    applyWeaponModel(0);   // 총 모양을 기본 피스톨로 되돌림
 
     yawObject.position.set(0, 1.6, 0);
     yawObject.rotation.y = 0;
