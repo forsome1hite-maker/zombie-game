@@ -17,6 +17,92 @@
     { name: '플라즈마건', damage: 130, fireRate: 0.12, pellets: 1, spread: 0.0,  range: 100, color: 0x5effa0, auto: true  },
   ];
 
+  // ---------- 사운드 (Web Audio로 합성, 외부 파일 없음) ----------
+  const Sound = {
+    ctx: null,
+    master: null,
+    noiseBuffer: null,
+
+    init() {
+      if (this.ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = 0.45;
+      this.master.connect(this.ctx.destination);
+      // 1초짜리 화이트노이즈 버퍼 (총성/타격음 재료)
+      const len = this.ctx.sampleRate;
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      this.noiseBuffer = buf;
+    },
+    resume() { if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); },
+
+    // 필터링한 노이즈 한 방
+    _noise(dur, type, freq, q, gain) {
+      const ctx = this.ctx;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuffer;
+      src.loop = true;
+      const filt = ctx.createBiquadFilter();
+      filt.type = type;
+      filt.frequency.value = freq;
+      if (q) filt.Q.value = q;
+      const g = ctx.createGain();
+      const t = ctx.currentTime;
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(filt); filt.connect(g); g.connect(this.master);
+      src.start(t); src.stop(t + dur);
+    },
+    // 오실레이터 톤 (필요하면 주파수 스윕)
+    _tone(freq, dur, type, gain, freqEnd, when) {
+      const ctx = this.ctx;
+      const o = ctx.createOscillator();
+      o.type = type || 'sine';
+      const g = ctx.createGain();
+      const t = (when || ctx.currentTime);
+      o.frequency.setValueAtTime(freq, t);
+      if (freqEnd) o.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+      g.gain.setValueAtTime(gain, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(this.master);
+      o.start(t); o.stop(t + dur);
+    },
+
+    shoot(level) {
+      if (!this.ctx) return;
+      this._tone(130 + level * 22, 0.12, 'square', 0.22, 40);  // 묵직한 발사
+      this._noise(0.12, 'lowpass', 1900, 1, 0.32);             // 총성
+      this._noise(0.05, 'highpass', 3200, 1, 0.14);            // 날카로운 끝맛
+    },
+    hit() {
+      if (!this.ctx) return;
+      this._noise(0.10, 'bandpass', 420, 2, 0.4);   // 퍽 하는 타격
+      this._tone(170, 0.10, 'sawtooth', 0.12, 80);
+    },
+    headshot() {
+      if (!this.ctx) return;
+      this._noise(0.06, 'highpass', 2600, 1, 0.3);          // 날카로운 크랙
+      this._tone(950, 0.08, 'square', 0.2, 320);
+      this._tone(210, 0.13, 'sawtooth', 0.16, 60);
+    },
+    death() {
+      if (!this.ctx) return;
+      this._tone(230, 0.5, 'sawtooth', 0.3, 45);    // 끄으윽 하강 신음
+      this._noise(0.4, 'lowpass', 700, 0.5, 0.25);
+    },
+    pickup() {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      [523.25, 659.25, 783.99].forEach((f, i) => {   // 도-미-솔 상승 아르페지오
+        this._tone(f, 0.16, 'sine', 0.28, null, t + i * 0.07);
+      });
+    },
+  };
+
   // ---------- 전역 상태 ----------
   let scene, camera, renderer, clock;
   let yawObject, pitchObject;            // 카메라 회전용
@@ -226,16 +312,18 @@
     torso.position.y = 1.0;
     g.add(torso);
 
-    // 머리
+    // 머리 (헤드샷 판정 부위)
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skinMat);
     head.position.y = 1.75;
+    head.userData.isHead = true;
     g.add(head);
 
-    // 눈 (빨간색)
+    // 눈 (빨간색) — 머리에 속하므로 헤드샷 판정
     const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff2222 });
     [-0.13, 0.13].forEach((x) => {
       const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeMat);
       eye.position.set(x, 1.8, 0.26);
+      eye.userData.isHead = true;
       g.add(eye);
     });
 
@@ -311,6 +399,8 @@
   function fire() {
     const w = WEAPONS[player.weaponLevel];
 
+    Sound.shoot(player.weaponLevel);
+
     // 총구 섬광 + 반동
     muzzleFlash.intensity = 3.5;
     gun.userData.flashMesh.material.opacity = 0.9;
@@ -341,7 +431,15 @@
         const hit = hits[0];
         hitPoint = hit.point.clone();
         const z = hit.object.userData.zombie;
-        if (z) damageZombie(z, w.damage, _dir);
+        if (z) {
+          // 헤드샷이면 3배 피해, 그 외(몸통/팔다리)는 기본 피해
+          const isHead = !!hit.object.userData.isHead;
+          const dmg = w.damage * (isHead ? 3.0 : 1.0);
+          if (isHead) Sound.headshot();
+          const killed = damageZombie(z, dmg, _dir);
+          if (!killed && !isHead) Sound.hit();   // 죽으면 사망음, 헤드샷이면 위에서 처리
+          hitMarker(isHead);
+        }
       }
       addTracer(origin, hitPoint, w.color);
     }
@@ -354,7 +452,11 @@
     z.mesh.position.addScaledVector(dir, z.isBig ? 0.05 : 0.18);
     clamp(z.mesh.position);
 
-    if (z.hp <= 0) killZombie(z);
+    if (z.hp <= 0) {
+      killZombie(z);
+      return true;   // 처치됨
+    }
+    return false;
   }
 
   function killZombie(z) {
@@ -363,6 +465,7 @@
     zombies.splice(idx, 1);
     scene.remove(z.mesh);
 
+    Sound.death();
     player.score += z.isBig ? 50 : 10;
 
     if (z.isBig) {
@@ -388,6 +491,8 @@
     if (idx === -1) return;
     items.splice(idx, 1);
     scene.remove(item.mesh);
+
+    Sound.pickup();
 
     if (player.weaponLevel < WEAPONS.length - 1) {
       player.weaponLevel++;
@@ -594,6 +699,18 @@
     setTimeout(() => dom.damageFlash.classList.remove('hit'), 90);
   }
 
+  // 명중 시 조준점 색 점멸 (헤드샷=금색, 그 외=빨강)
+  let hmTimer = null;
+  const _chSpans = document.querySelectorAll('#crosshair .ch');
+  function hitMarker(isHead) {
+    const col = isHead ? 'rgba(255,210,74,0.95)' : 'rgba(255,90,90,0.95)';
+    _chSpans.forEach((s) => { s.style.background = col; });
+    clearTimeout(hmTimer);
+    hmTimer = setTimeout(() => {
+      _chSpans.forEach((s) => { s.style.background = 'rgba(255,255,255,0.85)'; });
+    }, 110);
+  }
+
   let toastTimer = null;
   function showToast(msg) {
     dom.toast.textContent = msg;
@@ -623,6 +740,8 @@
   }
 
   function startGame() {
+    Sound.init();        // 오디오는 사용자 클릭 시점에 생성/재개해야 함
+    Sound.resume();
     dom.overlay.classList.add('hidden');
     resetState();
     running = true;
@@ -630,6 +749,8 @@
   }
 
   function restartGame() {
+    Sound.init();
+    Sound.resume();
     dom.gameover.classList.add('hidden');
     resetState();
     running = true;
