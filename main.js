@@ -435,7 +435,7 @@
           // 헤드샷이면 3배 피해, 그 외(몸통/팔다리)는 기본 피해
           const isHead = !!hit.object.userData.isHead;
           const dmg = w.damage * (isHead ? 3.0 : 1.0);
-          if (isHead) Sound.headshot();
+          if (isHead) { Sound.headshot(); showHeadshot(); }
           const killed = damageZombie(z, dmg, _dir);
           if (!killed && !isHead) Sound.hit();   // 죽으면 사망음, 헤드샷이면 위에서 처리
           hitMarker(isHead);
@@ -697,6 +697,14 @@
   function flashDamage() {
     dom.damageFlash.classList.add('hit');
     setTimeout(() => dom.damageFlash.classList.remove('hit'), 90);
+  }
+
+  // 헤드샷 팝업 (연속 헤드샷에도 매번 다시 튀도록 애니메이션 재시작)
+  const _headshotEl = document.getElementById('headshot');
+  function showHeadshot() {
+    _headshotEl.classList.remove('show');
+    void _headshotEl.offsetWidth;   // 리플로우 강제 → 애니메이션 리셋
+    _headshotEl.classList.add('show');
   }
 
   // 명중 시 조준점 색 점멸 (헤드샷=금색, 그 외=빨강)
