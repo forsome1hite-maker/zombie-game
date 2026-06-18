@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>좀비 슈팅 게임</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="game">
+    <!-- 조준점 -->
+    <div id="crosshair">
+      <span class="ch v"></span>
+      <span class="ch h"></span>
+    </div>
+
+    <!-- 상단 HUD -->
+    <div id="hud">
+      <div class="hud-row">
+        <div class="hud-box">
+          <div class="label">체력</div>
+          <div class="bar"><div id="healthFill"></div></div>
+          <div id="healthText" class="num">100</div>
+        </div>
+        <div class="hud-box">
+          <div class="label">무기</div>
+          <div id="weaponName" class="value">피스톨</div>
+        </div>
+        <div class="hud-box">
+          <div class="label">점수</div>
+          <div id="score" class="value">0</div>
+        </div>
+        <div class="hud-box">
+          <div class="label">웨이브</div>
+          <div id="wave" class="value">1</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 알림(아이템 획득 등) -->
+    <div id="toast"></div>
+
+    <!-- 피격 시 빨간 화면 -->
+    <div id="damageFlash"></div>
+
+    <!-- 시작 화면 -->
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <h1>🧟 좀비 슈팅</h1>
+        <p class="desc">다가오는 좀비를 향해 총을 쏘세요.<br>
+          <b>큰 좀비</b>를 처치하면 아이템이 떨어집니다 — 주우면 무기가 강해져요!</p>
+        <ul class="controls">
+          <li><b>이동</b> — W A S D</li>
+          <li><b>달리기</b> — Shift</li>
+          <li><b>시점</b> — 마우스</li>
+          <li><b>사격</b> — 마우스 왼쪽 클릭</li>
+          <li><b>아이템</b> — 가까이 다가가면 자동 획득</li>
+        </ul>
+        <button id="startBtn">클릭해서 시작</button>
+        <p class="hint">시작하면 마우스가 화면에 고정됩니다. (ESC로 해제)</p>
+      </div>
+    </div>
+
+    <!-- 게임오버 화면 -->
+    <div id="gameover" class="overlay hidden">
+      <div class="panel">
+        <h1>💀 게임 오버</h1>
+        <p class="desc">최종 점수: <span id="finalScore">0</span><br>
+          도달 웨이브: <span id="finalWave">1</span></p>
+        <button id="restartBtn">다시 시작</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Three.js (3D 렌더링) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>
