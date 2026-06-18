@@ -542,9 +542,10 @@
       mx /= len; mz /= len;
       const sin = Math.sin(yawObject.rotation.y);
       const cos = Math.cos(yawObject.rotation.y);
-      // 로컬 → 월드
-      const wx = mx * cos - mz * sin;
-      const wz = mx * sin + mz * cos;
+      // 로컬 이동(mx=좌우, mz=앞뒤) → 월드 좌표로 회전 변환
+      // 전방은 카메라 기준 -Z. yaw 회전(Y축)을 올바른 부호로 적용.
+      const wx = mx * cos + mz * sin;
+      const wz = -mx * sin + mz * cos;
       yawObject.position.x += wx * speed * dt;
       yawObject.position.z += wz * speed * dt;
       clamp(yawObject.position);
