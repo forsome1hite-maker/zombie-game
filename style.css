@@ -95,6 +95,30 @@ canvas {
   transition: width 0.15s ease;
 }
 #weaponName { color: #ffd45e; }
+#coins { color: #ffd45e; }
+
+/* 안전 가옥 보상 */
+#chestArea { margin: 8px 0 4px; }
+#chestBtn {
+  font-size: 22px;
+  padding: 18px 34px;
+  background: linear-gradient(90deg, #ffd24a, #ff9a3b);
+  animation: chestPulse 1.2s ease-in-out infinite;
+}
+#chestBtn:disabled { opacity: 0; pointer-events: none; }
+@keyframes chestPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 rgba(255,200,60,0); }
+  50%      { transform: scale(1.05); box-shadow: 0 0 26px rgba(255,200,60,0.7); }
+}
+.reward {
+  min-height: 56px;
+  white-space: pre-line;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: #ffe27a;
+  margin: 10px 0 16px;
+}
 
 /* 토스트 알림 */
 #toast {

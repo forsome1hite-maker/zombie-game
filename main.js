@@ -110,6 +110,13 @@
   const zombies = [];
   const items = [];
   const tracers = [];                    // 총알 궤적
+  const obstacles = [];                  // 충돌체 (상자=원형, 집 벽=박스)
+
+  // 안전 가옥 위치/크기
+  const HOUSE = { x: 0, z: -38, half: 4.5 };
+  let houseDoorMat = null, houseLight = null;
+  let restAvailable = false;             // 휴식 가능(집 문이 빛남)
+  let resting = false;                   // 집 안에서 휴식 중
 
   const keys = {};
   let locked = false;
@@ -125,6 +132,8 @@
     weaponLevel: 0,
     score: 0,
     wave: 1,
+    coins: 0,
+    restWave: 5,                         // 마지막으로 클리어한 휴식 웨이브
   };
 
   let fireCooldown = 0;
@@ -151,10 +160,17 @@
     weaponName: el('weaponName'),
     score: el('score'),
     wave: el('wave'),
+    coins: el('coins'),
     finalScore: el('finalScore'),
     finalWave: el('finalWave'),
+    finalCoins: el('finalCoins'),
     toast: el('toast'),
     damageFlash: el('damageFlash'),
+    house: el('house'),
+    houseWave: el('houseWave'),
+    chestBtn: el('chestBtn'),
+    rewardText: el('rewardText'),
+    leaveBtn: el('leaveBtn'),
   };
 
   // ============================================================
@@ -206,6 +222,8 @@
 
     dom.startBtn.addEventListener('click', startGame);
     dom.restartBtn.addEventListener('click', restartGame);
+    dom.chestBtn.addEventListener('click', openChest);
+    dom.leaveBtn.addEventListener('click', leaveHouse);
 
     animate();
   }
@@ -239,7 +257,7 @@
       scene.add(m);
     });
 
-    // 흩어진 상자(엄폐물 겸 분위기)
+    // 흩어진 상자(엄폐물 겸 분위기) — 충돌체로 등록
     const crateMat = new THREE.MeshStandardMaterial({ color: 0x3a4252, roughness: 0.8 });
     for (let i = 0; i < 26; i++) {
       const s = 1.4 + Math.random() * 2.2;
@@ -251,8 +269,107 @@
       );
       // 시작 지점 근처는 비워둠
       if (c.position.length() < 8) c.position.x += 12;
+      // 집과 겹치면 비켜둠
+      if (Math.hypot(c.position.x - HOUSE.x, c.position.z - HOUSE.z) < HOUSE.half + 4) {
+        c.position.x += HOUSE.half + 8;
+      }
       c.rotation.y = Math.random() * Math.PI;
       scene.add(c);
+      // 충돌체: 회전한 정육면체를 원으로 근사
+      obstacles.push({ x: c.position.x, z: c.position.z, r: s * 0.55 });
+    }
+
+    buildHouse();
+  }
+
+  // ---------- 안전 가옥 ----------
+  function buildHouse() {
+    const cx = HOUSE.x, cz = HOUSE.z, h = HOUSE.half;
+    const wallMat = new THREE.MeshStandardMaterial({ color: 0x6b5743, roughness: 0.9 });
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x4a3b2c, roughness: 1 });
+    const roofMat = new THREE.MeshStandardMaterial({ color: 0x3a2b20, roughness: 0.95 });
+    const wallH = 4, t = 0.5;
+
+    // 바닥
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(h * 2, 0.1, h * 2), floorMat);
+    floor.position.set(cx, 0.05, cz);
+    scene.add(floor);
+
+    // 벽 추가 헬퍼 (시각 메쉬 + AABB 충돌체)
+    const addWall = (x, z, w, d) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, wallH, d), wallMat);
+      m.position.set(x, wallH / 2, z);
+      scene.add(m);
+      obstacles.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+    };
+
+    addWall(cx, cz - h, h * 2, t);            // 뒷벽
+    addWall(cx - h, cz, t, h * 2);            // 왼벽
+    addWall(cx + h, cz, t, h * 2);            // 오른벽
+    // 앞벽(+z) — 가운데 문 구멍(폭 2.5)
+    const gap = 1.25;
+    const segW = h - gap;                      // 한쪽 벽 길이
+    addWall(cx - (gap + segW / 2), cz + h, segW, t);
+    addWall(cx + (gap + segW / 2), cz + h, segW, t);
+
+    // 지붕
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(h * 2 + 0.6, 0.3, h * 2 + 0.6), roofMat);
+    roof.position.set(cx, wallH + 0.15, cz);
+    scene.add(roof);
+
+    // 문 표시등(빛나는 슬래브) — 휴식 가능 시 초록빛
+    houseDoorMat = new THREE.MeshStandardMaterial({
+      color: 0x553030, emissive: 0x100808, emissiveIntensity: 1, roughness: 0.4,
+      transparent: true, opacity: 0.55,
+    });
+    const doorSlab = new THREE.Mesh(new THREE.BoxGeometry(gap * 2, wallH * 0.8, 0.2), houseDoorMat);
+    doorSlab.position.set(cx, wallH * 0.4, cz + h);
+    scene.add(doorSlab);
+
+    houseLight = new THREE.PointLight(0xff5544, 0, 14);
+    houseLight.position.set(cx, 2.2, cz + h + 1.5);
+    scene.add(houseLight);
+
+    setHouseGlow(false);
+  }
+
+  // 집 문 빛 상태 (휴식 가능 여부)
+  function setHouseGlow(on) {
+    if (!houseDoorMat) return;
+    houseDoorMat.color.setHex(on ? 0x46ff8c : 0x553030);
+    houseDoorMat.emissive.setHex(on ? 0x1f7a40 : 0x100808);
+    houseLight.color.setHex(on ? 0x46ff8c : 0xff5544);
+    houseLight.intensity = on ? 2.4 : 0.0;
+  }
+
+  // 충돌 해소: pos를 모든 장애물 밖으로 밀어낸다
+  function resolveObstacles(pos, radius) {
+    for (const o of obstacles) {
+      if (o.r != null) {
+        // 원형(상자)
+        const dx = pos.x - o.x, dz = pos.z - o.z;
+        let d = Math.hypot(dx, dz);
+        const min = o.r + radius;
+        if (d < min) {
+          if (d < 1e-4) { pos.x += min; continue; }
+          const push = min - d;
+          pos.x += (dx / d) * push;
+          pos.z += (dz / d) * push;
+        }
+      } else {
+        // AABB(집 벽) — 반지름만큼 확장 후 최소 침투 방향으로 밀어냄
+        const minX = o.minX - radius, maxX = o.maxX + radius;
+        const minZ = o.minZ - radius, maxZ = o.maxZ + radius;
+        if (pos.x > minX && pos.x < maxX && pos.z > minZ && pos.z < maxZ) {
+          const pxL = pos.x - minX, pxR = maxX - pos.x;
+          const pzL = pos.z - minZ, pzR = maxZ - pos.z;
+          const m = Math.min(pxL, pxR, pzL, pzR);
+          if (m === pxL) pos.x = minX;
+          else if (m === pxR) pos.x = maxX;
+          else if (m === pzL) pos.z = minZ;
+          else pos.z = maxZ;
+        }
+      }
     }
   }
 
@@ -545,9 +662,10 @@
         hitPoint = hit.point.clone();
         const z = hit.object.userData.zombie;
         if (z) {
-          // 헤드샷이면 3배 피해, 그 외(몸통/팔다리)는 기본 피해
+          // 헤드샷 피해 배율 — 웨이브가 오를수록 줄어 한 방에 죽지 않게 됨
           const isHead = !!hit.object.userData.isHead;
-          const dmg = w.damage * (isHead ? 3.0 : 1.0);
+          const headMult = Math.max(1.5, 3.0 - (player.wave - 1) * 0.18);
+          const dmg = w.damage * (isHead ? headMult : 1.0);
           if (isHead) { Sound.headshot(); showHeadshot(); }
           const killed = damageZombie(z, dmg, _dir);
           if (!killed && !isHead) Sound.hit();   // 죽으면 사망음, 헤드샷이면 위에서 처리
@@ -621,13 +739,71 @@
   }
 
   // ============================================================
+  // 안전 가옥 (휴식 + 보상 상자)
+  // ============================================================
+  function enterHouse() {
+    if (resting) return;
+    resting = true;
+    restAvailable = false;
+    setHouseGlow(false);
+
+    // 좀비 정리 (집 안은 안전)
+    zombies.forEach((z) => scene.remove(z.mesh));
+    zombies.length = 0;
+    wantFire = false;
+
+    try { document.exitPointerLock(); } catch (e) {}
+
+    // 보상 UI 초기화 후 표시
+    dom.houseWave.textContent = player.restWave;
+    dom.rewardText.textContent = '';
+    dom.chestBtn.disabled = false;
+    dom.house.classList.remove('hidden');
+  }
+
+  function openChest() {
+    if (dom.chestBtn.disabled) return;
+    dom.chestBtn.disabled = true;
+    Sound.pickup();
+
+    // 코인: 기본 + 웨이브 보너스 (랜덤)
+    const coins = 60 + Math.floor(Math.random() * 141) + player.restWave * 12;
+    player.coins += coins;
+    let msg = `💰 코인 +${coins}`;
+
+    // 아주 낮은 확률(7%)로 무기 강화
+    if (Math.random() < 0.07 && player.weaponLevel < WEAPONS.length - 1) {
+      player.weaponLevel++;
+      applyWeaponModel(player.weaponLevel);
+      msg += `\n🎉 희귀 무기 획득! → ${WEAPONS[player.weaponLevel].name} ⚡`;
+      Sound.headshot();
+    } else {
+      msg += '\n다음 기회에 무기가 나올지도…?';
+    }
+
+    dom.rewardText.textContent = msg;
+    updateHUD();
+  }
+
+  function leaveHouse() {
+    resting = false;
+    dom.house.classList.add('hidden');
+    // 집 문 앞(밖)으로 이동시켜 즉시 재진입을 막음
+    yawObject.position.set(HOUSE.x, 1.6, HOUSE.z + HOUSE.half + 3);
+    yawObject.rotation.y = Math.PI;   // 바깥(좀비 쪽)을 바라봄
+    pitchObject.rotation.x = 0;
+    spawnTimer = 1.2;
+    requestLock();
+  }
+
+  // ============================================================
   // 루프
   // ============================================================
   function animate() {
     requestAnimationFrame(animate);
     const dt = Math.min(clock.getDelta(), 0.05);
 
-    if (running && !gameOver) {
+    if (running && !gameOver && !resting) {
       updatePlayer(dt);
       updateZombies(dt);
       updateItems(dt);
@@ -661,6 +837,7 @@
       yawObject.position.x += wx * speed * dt;
       yawObject.position.z += wz * speed * dt;
       clamp(yawObject.position);
+      resolveObstacles(yawObject.position, player.radius);
 
       // 걷기 흔들림(뷰 보빙)
       bob += dt * speed * 1.6;
@@ -670,6 +847,15 @@
       // 멈추면 흔들림을 중앙으로 복귀
       camera.position.x += (0 - camera.position.x) * Math.min(1, dt * 8);
       camera.position.y += (0 - camera.position.y) * Math.min(1, dt * 8);
+    }
+
+    // 휴식 가능 상태에서 집 안에 들어오면 휴식 시작
+    if (restAvailable && !resting) {
+      const p = yawObject.position;
+      if (Math.abs(p.x - HOUSE.x) < HOUSE.half - 0.8 &&
+          Math.abs(p.z - HOUSE.z) < HOUSE.half - 0.8) {
+        enterHouse();
+      }
     }
   }
   let bob = 0;
@@ -692,6 +878,7 @@
         // 접근
         m.position.x += (dx / distXZ) * z.speed * dt;
         m.position.z += (dz / distXZ) * z.speed * dt;
+        resolveObstacles(m.position, z.isBig ? 0.9 : (z.isRunner ? 0.35 : 0.45));
         // 다리 흔들기
         z.walkPhase += dt * z.speed * 2.2;
         const sw = Math.sin(z.walkPhase) * 0.5;
@@ -743,7 +930,15 @@
       waveTimer = 0;
       player.wave++;
       spawnInterval = Math.max(0.7, spawnInterval - 0.18);
-      showToast(`웨이브 ${player.wave} 시작!`);
+      // 5웨이브를 클리어할 때마다 휴식 가능 (집 문이 빛난다)
+      if ((player.wave - 1) % 5 === 0) {
+        restAvailable = true;
+        player.restWave = player.wave - 1;
+        setHouseGlow(true);
+        showToast(`${player.restWave}웨이브 클리어! 🏠 빛나는 집으로 들어가 쉬세요`);
+      } else {
+        showToast(`웨이브 ${player.wave} 시작!`);
+      }
       updateHUD();
     }
 
@@ -865,6 +1060,7 @@
     dom.weaponName.textContent = WEAPONS[player.weaponLevel].name;
     dom.score.textContent = player.score;
     dom.wave.textContent = player.wave;
+    dom.coins.textContent = player.coins;
   }
 
   // ============================================================
@@ -909,6 +1105,12 @@
     player.weaponLevel = 0;
     player.score = 0;
     player.wave = 1;
+    player.coins = 0;
+    player.restWave = 5;
+    restAvailable = false;
+    resting = false;
+    dom.house.classList.add('hidden');
+    setHouseGlow(false);
     applyWeaponModel(0);   // 총 모양을 기본 피스톨로 되돌림
 
     yawObject.position.set(0, 1.6, 0);
@@ -931,6 +1133,7 @@
     document.exitPointerLock();
     dom.finalScore.textContent = player.score;
     dom.finalWave.textContent = player.wave;
+    dom.finalCoins.textContent = player.coins;
     dom.gameover.classList.remove('hidden');
   }
 

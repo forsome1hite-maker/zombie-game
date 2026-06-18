@@ -34,6 +34,10 @@
           <div class="label">웨이브</div>
           <div id="wave" class="value">1</div>
         </div>
+        <div class="hud-box">
+          <div class="label">코인</div>
+          <div id="coins" class="value">0</div>
+        </div>
       </div>
     </div>
 
@@ -64,12 +68,26 @@
       </div>
     </div>
 
+    <!-- 안전 가옥(휴식) 화면 -->
+    <div id="house" class="overlay hidden">
+      <div class="panel">
+        <h1>🏠 안전 가옥</h1>
+        <p class="desc"><b><span id="houseWave">5</span>웨이브</b> 클리어! 잠시 쉬며 보상을 받으세요.</p>
+        <div id="chestArea">
+          <button id="chestBtn">🎁 보상 상자 열기</button>
+        </div>
+        <p id="rewardText" class="reward"></p>
+        <button id="leaveBtn">나가서 계속하기 ▶</button>
+      </div>
+    </div>
+
     <!-- 게임오버 화면 -->
     <div id="gameover" class="overlay hidden">
       <div class="panel">
         <h1>💀 게임 오버</h1>
         <p class="desc">최종 점수: <span id="finalScore">0</span><br>
-          도달 웨이브: <span id="finalWave">1</span></p>
+          도달 웨이브: <span id="finalWave">1</span><br>
+          모은 코인: <span id="finalCoins">0</span> 💰</p>
         <button id="restartBtn">다시 시작</button>
       </div>
     </div>
