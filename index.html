@@ -45,6 +45,12 @@
       </div>
     </div>
 
+    <!-- 미니맵 (오른쪽 위) -->
+    <div id="minimap">
+      <canvas id="minimapCanvas" width="180" height="180"></canvas>
+      <div class="mm-label">MAP</div>
+    </div>
+
     <!-- 알림(아이템 획득 등) -->
     <div id="toast"></div>
 
@@ -62,7 +68,8 @@
       <div class="panel">
         <h1>🧟 좀비 슈팅</h1>
         <p class="desc">다가오는 좀비를 향해 총을 쏘세요.<br>
-          <b>큰 좀비</b>를 처치하면 아이템이 떨어집니다 — 주우면 무기가 강해져요!<br>
+          <b>큰 좀비</b>를 처치하면 아이템이 떨어집니다 — <b>20%</b>는 무기 강화 ⚡, <b>80%</b>는 보너스 점수 보석 💎!<br>
+          <b>웨이브 10</b> 이후엔 빠른 <b>여자 좀비</b>가 등장합니다.<br>
           <b>3웨이브</b>마다 안전가옥 문이 열려 보상을, <b>5웨이브</b>마다 상점이 열립니다.</p>
         <ul class="controls">
           <li><b>이동</b> — W A S D</li>

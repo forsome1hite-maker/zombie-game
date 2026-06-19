@@ -43,6 +43,37 @@ canvas {
 #crosshair .v { left: 50%; top: 0; width: 2px; height: 100%; transform: translateX(-50%); }
 #crosshair .h { top: 50%; left: 0; height: 2px; width: 100%; transform: translateY(-50%); }
 
+/* 미니맵 (오른쪽 위) */
+#minimap {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 180px;
+  height: 180px;
+  z-index: 5;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(8, 10, 14, 0.55);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  overflow: hidden;
+}
+#minimapCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+#minimap .mm-label {
+  position: absolute;
+  top: 4px;
+  left: 8px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 700;
+  color: rgba(159, 179, 200, 0.85);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 /* HUD */
 #hud {
   position: absolute;

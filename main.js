@@ -639,6 +639,8 @@
     normal: { scale: 1.0,  skin: 0x4f9d52, baseHp: 60,  speed: 2.6, damage: 8  },
     big:    { scale: 2.2,  skin: 0x2f7d32, baseHp: 320, speed: 1.7, damage: 18 },
     runner: { scale: 0.9,  skin: 0xc6e84a, baseHp: 32,  speed: 6.4, damage: 6  },
+    // 여자 좀비 — 웨이브 10 이후 등장. 데미지는 약하지만 빠르게 달려든다.
+    female: { scale: 0.95, skin: 0xd98fb0, baseHp: 40,  speed: 5.0, damage: 4  },
   };
 
   function makeZombie(type) {
@@ -647,14 +649,15 @@
     const cfg = ZOMBIE_TYPES[type] || ZOMBIE_TYPES.normal;
     const isBig = type === 'big';
     const isRunner = type === 'runner';
+    const isFemale = type === 'female';
 
     const g = new THREE.Group();
     const skin = cfg.skin;
     const skinMat = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.85 });
 
-    // 러너는 호리호리하게, 그 외는 보통 체형
-    const tw = isRunner ? 0.5 : 0.7;   // 몸통 너비
-    const td = isRunner ? 0.32 : 0.4;  // 몸통 두께
+    // 러너는 호리호리하게, 여자 좀비는 약간 슬림, 그 외는 보통 체형
+    const tw = isRunner ? 0.5 : (isFemale ? 0.56 : 0.7);   // 몸통 너비
+    const td = isRunner ? 0.32 : (isFemale ? 0.34 : 0.4);  // 몸통 두께
 
     // 몸통
     const torso = new THREE.Mesh(new THREE.BoxGeometry(tw, 1.0, td), skinMat);
@@ -663,21 +666,36 @@
     g.add(torso);
 
     // 머리 (헤드샷 판정 부위)
-    const headSize = isRunner ? 0.42 : 0.5;
+    const headSize = isRunner ? 0.42 : (isFemale ? 0.46 : 0.5);
     const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), skinMat);
     head.position.y = isRunner ? 1.7 : 1.75;
     if (isRunner) head.position.z = 0.18;
     head.userData.isHead = true;
     g.add(head);
 
-    // 눈 — 러너는 더 사납게 주황빛, 그 외 빨강
-    const eyeMat = new THREE.MeshBasicMaterial({ color: isRunner ? 0xff7a1a : 0xff2222 });
+    // 눈 — 러너는 주황빛, 여자 좀비는 분홍빛, 그 외 빨강
+    const eyeMat = new THREE.MeshBasicMaterial({ color: isRunner ? 0xff7a1a : (isFemale ? 0xff3a8c : 0xff2222) });
     [-0.13, 0.13].forEach((x) => {
       const eye = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeMat);
       eye.position.set(x * (isRunner ? 0.8 : 1), isRunner ? 1.74 : 1.8, isRunner ? 0.4 : 0.26);
       eye.userData.isHead = true;
       g.add(eye);
     });
+
+    // 여자 좀비 전용 — 긴 머리(포니테일)와 치마
+    if (isFemale) {
+      const hairMat = new THREE.MeshStandardMaterial({ color: 0x3a2233, roughness: 0.95 });
+      const hair = new THREE.Mesh(new THREE.BoxGeometry(headSize + 0.08, headSize + 0.12, 0.16), hairMat);
+      hair.position.set(0, head.position.y + 0.06, -0.16);
+      g.add(hair);
+      const pony = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.55, 0.16), hairMat);
+      pony.position.set(0, head.position.y - 0.18, -0.26);
+      g.add(pony);
+      const dressMat = new THREE.MeshStandardMaterial({ color: 0xc85a9c, roughness: 0.85 });
+      const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.52, 0.55, 12), dressMat);
+      skirt.position.set(0, 0.66, 0);
+      g.add(skirt);
+    }
 
     // 팔 (앞으로 뻗음)
     const armMat = skinMat;
@@ -719,8 +737,9 @@
       type: type,
       isBig: isBig,
       isRunner: isRunner,
+      isFemale: isFemale,
       damage: cfg.damage,
-      speed: cfg.speed * (0.92 + Math.random() * 0.16) + wave * (isRunner ? 0.06 : 0.04),
+      speed: cfg.speed * (0.92 + Math.random() * 0.16) + wave * (isRunner || isFemale ? 0.06 : 0.04),
       attackCd: 0,
       hitFlash: 0,
       walkPhase: Math.random() * Math.PI * 2,
@@ -735,20 +754,36 @@
   // ============================================================
   // 아이템 (무기 업그레이드)
   // ============================================================
-  function dropItem(pos) {
+  // kind: 'weapon' = 무기 강화(금색 상자), 'score' = 보너스 점수(청록 보석)
+  function dropItem(pos, kind) {
+    kind = kind || 'weapon';
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xffd45e, emissive: 0xffaa00, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4,
-    });
-    const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat);
-    g.add(box);
-    const glow = new THREE.PointLight(0xffcc44, 1.4, 6);
-    glow.position.y = 0.3;
-    g.add(glow);
+
+    if (kind === 'score') {
+      // 청록색 보석 — 점수 보너스
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x4ad0ff, emissive: 0x1f8ad0, emissiveIntensity: 0.7, roughness: 0.2, metalness: 0.5,
+      });
+      const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.45), mat);
+      g.add(gem);
+      const glow = new THREE.PointLight(0x4ad0ff, 1.4, 6);
+      glow.position.y = 0.3;
+      g.add(glow);
+    } else {
+      // 금색 상자 — 무기 강화
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffd45e, emissive: 0xffaa00, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4,
+      });
+      const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat);
+      g.add(box);
+      const glow = new THREE.PointLight(0xffcc44, 1.4, 6);
+      glow.position.y = 0.3;
+      g.add(glow);
+    }
 
     g.position.set(pos.x, 0.9, pos.z);
     scene.add(g);
-    items.push({ mesh: g, spin: 0, life: 30 }); // 30초 후 사라짐
+    items.push({ mesh: g, kind: kind, spin: 0, life: 30 }); // 30초 후 사라짐
   }
 
   // ============================================================
@@ -830,8 +865,14 @@
     player.coins += z.isBig ? 12 : (z.isRunner ? 3 : 4);
 
     if (z.isBig) {
-      dropItem(z.mesh.position);
-      showToast('큰 좀비 처치! 아이템 드롭 💎');
+      // 20% 무기 강화 아이템, 80% 보너스 점수 아이템
+      if (Math.random() < 0.20) {
+        dropItem(z.mesh.position, 'weapon');
+        showToast('큰 좀비 처치! 무기 강화 아이템 ⚡');
+      } else {
+        dropItem(z.mesh.position, 'score');
+        showToast('큰 좀비 처치! 보너스 점수 보석 💎');
+      }
     }
     updateHUD();
   }
@@ -855,6 +896,15 @@
     scene.remove(item.mesh);
 
     Sound.pickup();
+
+    // 보너스 점수 보석 — 무기는 그대로, 점수만 크게 오른다
+    if (item.kind === 'score') {
+      const bonus = 100 + player.wave * 10;
+      player.score += bonus;
+      showToast(`보너스 점수 +${bonus} 💎`);
+      updateHUD();
+      return;
+    }
 
     if (player.weaponLevel < WEAPONS.length - 1) {
       player.weaponLevel++;
@@ -1051,8 +1101,74 @@
       updateShooting(dt);
     }
     updateEffects(dt);
+    updateMinimap();
 
     renderer.render(scene, camera);
+  }
+
+  // ---------- 미니맵 ----------
+  const miniCanvas = document.getElementById('minimapCanvas');
+  const miniCtx = miniCanvas ? miniCanvas.getContext('2d') : null;
+
+  function updateMinimap() {
+    if (!miniCtx) return;
+    const W = miniCanvas.width, H = miniCanvas.height;
+    const ctx = miniCtx;
+    const span = MAP_SIZE * 2;
+    const toX = (x) => (x + MAP_SIZE) / span * W;
+    const toY = (z) => (z + MAP_SIZE) / span * H;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(14, 18, 26, 0.9)';
+    ctx.fillRect(0, 0, W, H);
+
+    // 건물 (열려 있으면 밝게)
+    const drawBldg = (b, openCol, dimCol, available) => {
+      ctx.fillStyle = available ? openCol : dimCol;
+      ctx.fillRect(toX(b.x - b.half), toY(b.z - b.half),
+                   (b.half * 2) / span * W, (b.half * 2) / span * H);
+    };
+    drawBldg(HOUSE, '#46ff8c', 'rgba(70, 150, 90, 0.55)', restAvailable);
+    drawBldg(SHOP, '#4ad0ff', 'rgba(70, 120, 180, 0.55)', shopAvailable);
+
+    // 좀비
+    for (const z of zombies) {
+      const m = z.mesh;
+      ctx.beginPath();
+      ctx.arc(toX(m.position.x), toY(m.position.z), z.isBig ? 4 : 2.2, 0, Math.PI * 2);
+      ctx.fillStyle = z.isBig ? '#ff8a3b'
+                    : z.isRunner ? '#c6e84a'
+                    : z.isFemale ? '#ff7ac0'
+                    : '#ff4d4d';
+      ctx.fill();
+    }
+
+    // 아이템
+    for (const it of items) {
+      ctx.beginPath();
+      ctx.arc(toX(it.mesh.position.x), toY(it.mesh.position.z), 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = it.kind === 'score' ? '#4ad0ff' : '#ffd45e';
+      ctx.fill();
+    }
+
+    // 플레이어 (바라보는 방향을 가리키는 삼각형)
+    camera.getWorldDirection(_dir);
+    let ux = _dir.x, uz = _dir.z;
+    const len = Math.hypot(ux, uz) || 1;
+    ux /= len; uz /= len;
+    const pxv = -uz, pzv = ux;           // 수직 벡터
+    const px = toX(yawObject.position.x), py = toY(yawObject.position.z);
+    const s = 6;
+    ctx.beginPath();
+    ctx.moveTo(px + ux * s, py + uz * s);
+    ctx.lineTo(px - ux * s * 0.7 + pxv * s * 0.6, py - uz * s * 0.7 + pzv * s * 0.6);
+    ctx.lineTo(px - ux * s * 0.7 - pxv * s * 0.6, py - uz * s * 0.7 - pzv * s * 0.6);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
   }
 
   function updatePlayer(dt) {
@@ -1133,7 +1249,7 @@
         // 공격 (플레이어가 안전 지대에 있으면 공격 불가)
         z.attackCd -= dt;
         if (z.attackCd <= 0) {
-          z.attackCd = z.isRunner ? 0.7 : 1.0;   // 러너는 더 빠르게 할퀸다
+          z.attackCd = z.isRunner ? 0.7 : (z.isFemale ? 0.8 : 1.0);   // 러너·여자 좀비는 더 빠르게 할퀸다
           damagePlayer(z.damage);
         }
       }
@@ -1212,9 +1328,15 @@
     const wave = player.wave;
     const bigChance = Math.min(0.30, 0.06 + wave * 0.025);
     const runnerChance = wave < 2 ? 0 : Math.min(0.45, 0.12 + (wave - 1) * 0.04);
+    // 여자 좀비는 웨이브 10 초과부터 등장
+    const femaleChance = wave <= 10 ? 0 : Math.min(0.35, (wave - 10) * 0.05);
     const r = Math.random();
-    if (r < bigChance) return 'big';
-    if (r < bigChance + runnerChance) return 'runner';
+    let acc = bigChance;
+    if (r < acc) return 'big';
+    acc += femaleChance;
+    if (r < acc) return 'female';
+    acc += runnerChance;
+    if (r < acc) return 'runner';
     return 'normal';
   }
 
