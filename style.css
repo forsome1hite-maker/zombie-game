@@ -120,6 +120,58 @@ canvas {
   margin: 10px 0 16px;
 }
 
+#defense { font-size: 16px; }
+
+/* 상점 */
+.shop-panel { max-width: 540px; }
+.shop-items {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 6px;
+}
+.shop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.shop-item .info { text-align: left; }
+.shop-item .info .nm { font-size: 16px; font-weight: 700; }
+.shop-item .info .ds { font-size: 12px; color: #9fb3c8; margin-top: 2px; }
+.shop-item button {
+  font-size: 14px;
+  padding: 9px 16px;
+  white-space: nowrap;
+  min-width: 86px;
+}
+.shop-item button:disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  filter: grayscale(0.7);
+}
+
+/* 상점 보호막(무적) 타이머 */
+#shieldTimer {
+  position: absolute;
+  top: 84px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-size: 18px;
+  font-weight: 700;
+  color: #7ec8ff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+#shieldTimer.show { opacity: 1; }
+
 /* 토스트 알림 */
 #toast {
   position: absolute;

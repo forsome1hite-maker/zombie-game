@@ -38,11 +38,18 @@
           <div class="label">코인</div>
           <div id="coins" class="value">0</div>
         </div>
+        <div class="hud-box">
+          <div class="label">방어</div>
+          <div id="defense" class="value">🛡️0 · 🦺0%</div>
+        </div>
       </div>
     </div>
 
     <!-- 알림(아이템 획득 등) -->
     <div id="toast"></div>
+
+    <!-- 상점 보호막(무적) 남은 시간 -->
+    <div id="shieldTimer"></div>
 
     <!-- 헤드샷 팝업 -->
     <div id="headshot">HEADSHOT! <span class="emo">💥</span></div>
@@ -55,7 +62,8 @@
       <div class="panel">
         <h1>🧟 좀비 슈팅</h1>
         <p class="desc">다가오는 좀비를 향해 총을 쏘세요.<br>
-          <b>큰 좀비</b>를 처치하면 아이템이 떨어집니다 — 주우면 무기가 강해져요!</p>
+          <b>큰 좀비</b>를 처치하면 아이템이 떨어집니다 — 주우면 무기가 강해져요!<br>
+          <b>3웨이브</b>마다 안전가옥 문이 열려 보상을, <b>5웨이브</b>마다 상점이 열립니다.</p>
         <ul class="controls">
           <li><b>이동</b> — W A S D</li>
           <li><b>달리기</b> — Shift</li>
@@ -78,6 +86,18 @@
         </div>
         <p id="rewardText" class="reward"></p>
         <button id="leaveBtn">나가서 계속하기 ▶</button>
+      </div>
+    </div>
+
+    <!-- 상점 화면 -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel shop-panel">
+        <h1>🛒 상점</h1>
+        <p class="desc">보유 코인: <b><span id="shopCoins">0</span> 💰</b><br>
+          필요한 장비를 구매하세요. 나가면 <b>30초</b>간 좀비 공격을 받지 않습니다.</p>
+        <div id="shopItems" class="shop-items"></div>
+        <p id="shopMsg" class="reward"></p>
+        <button id="shopLeaveBtn">나가기 ▶ (30초 보호)</button>
       </div>
     </div>
 
