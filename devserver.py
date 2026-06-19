@@ -11,7 +11,7 @@
 사용법:  python devserver.py [포트]   (기본 포트 8000)
 """
 import sys
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 
 class NoCacheHandler(SimpleHTTPRequestHandler):
@@ -33,7 +33,8 @@ class NoCacheHandler(SimpleHTTPRequestHandler):
 
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-    server = HTTPServer(("", port), NoCacheHandler)
+    # 스레드 방식: 연결 하나가 묶여도 서버 전체가 멈추지 않는다.
+    server = ThreadingHTTPServer(("", port), NoCacheHandler)
     print(f"No-cache dev server running at http://localhost:{port}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
