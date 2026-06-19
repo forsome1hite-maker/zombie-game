@@ -4,7 +4,7 @@
     {
       "name": "game",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8000"],
+      "runtimeArgs": ["devserver.py", "8000"],
       "port": 8000
     }
   ]
